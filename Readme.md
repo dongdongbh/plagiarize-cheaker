@@ -1,21 +1,32 @@
-# Plagiarism Detection Tool for PDF Documents
+# Plagiarism Detection Tool
 
-## Overview
-
-This project provides a simple yet effective tool for detecting potential plagiarism in text-based PDF documents. Utilizing Python, the tool first converts PDF files to text and then performs similarity comparisons between all pairs of documents within a specified directory. This approach can be particularly useful for educators, teaching assistants, and content managers aiming to ensure the originality of submitted texts.
+This tool is designed to automate the process of detecting plagiarism in student submissions. It extracts text from PDF files, filters out common questions, and compares documents to identify significant similarities.
 
 ## Features
 
-- **PDF to Text Conversion**: Extracts plain text from PDF documents for analysis.
-- **Similarity Checking**: Compares the textual content of each pair of documents to determine similarity scores.
-- **Scalable**: Easily adaptable to handle large sets of documents.
+- PDF text extraction using PyMuPDF.
+- Sentence-level text filtering to exclude common questions or instructions.
+- Document comparison to identify similarities based on configurable thresholds.
+- Parallel processing for efficient handling of large numbers of documents.
+- Creation of individual review folders for each student, containing the documents involved in plagiarism cases and a detailed report.
 
 ## Getting Started
 
-### Prerequisites
+### Requirements
 
 - Python 3.x
-- Installation of required Python libraries: `PyMuPDF`, `difflib`
+- [PyMuPDF](https://pypi.org/project/PyMuPDF/)
+- [spaCy](https://spacy.io/)
+- [NLTK](https://www.nltk.org/)
+- [tqdm](https://tqdm.github.io/)
+
+Make sure to install the required Python packages using pip:
+
+```bash
+pip install PyMuPDF spacy nltk tqdm
+python -m spacy download en_core_web_sm
+python -m nltk.downloader punkt
+```
 
 ### Installation
 
@@ -32,13 +43,33 @@ git clone https://github.com/dongdongbh/plagiarize-cheaker.git
 
 ### Usage
 
-1. Place all PDF documents you wish to analyze in the `./data/` directory.
-2. Run the script to extract text from PDFs and compare documents for similarity.
-`python main.py`
+The tool can be configured and run via the command line. Here are the available options:
 
-3. Review the output similarity scores to identify potential plagiarism.
+`--question_path`: Path to the PDF file containing the homework questions. (default: ./data/questions/Homework6.pdf)
+
+`--data_dir`: Directory containing student submissions. (default: ./data/hw6/)
+
+`--cover_letter_path`: Path to the PDF file containing the cover letter. (default: ./data/questions/675cover.pdf)
+
+`--min_block_size`: Minimum block size for considering a text match significant (only for notes). (default: 50)
+
+`--question_filter_threshold`: Threshold for filtering out question sentences. (default: 0.7)
+
+`--similarity_threshold`: Threshold for considering documents similar. (default: 0.2)
+
+Example command:
+
+```bash
+python3 main.py --data_dir "./data/hw6/" --question_path "./data/questions/Homework6.pdf" --cover_letter_path "./data/questions/675cover.pdf"
+```
 
 ![Result](./img/result.png "Result of similarity comparison between PDF documents")
+
+## How It Works
+1. Preparation: The script first removes any existing review folders in the specified data directory to start fresh.
+2. Text Extraction and Filtering: For each PDF submission, the script extracts text, filters out sentences matching those in the provided question and cover letter documents, and then saves the filtered text for comparison.
+3. Comparison: Documents are compared pairwise to calculate similarity scores. Cases where the similarity exceeds the configured threshold are flagged for review.
+4. Review Folders: For each student involved in a flagged case, a folder is created containing their submission, the submissions they're compared with, and a CSV report detailing the comparisons.
 
 ## License
 
