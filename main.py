@@ -1,5 +1,5 @@
 import argparse
-
+from docx import Document
 import fitz  # PyMuPDF
 import csv
 import os
@@ -29,7 +29,7 @@ def get_args():
 
     parser.add_argument("--min_block_size", type=int, default=50, help="Minimum block size for considering a text match significant")
     parser.add_argument("--question_filter_threshold", type=float, default=0.7, help="Threshold for filtering out question sentences")
-    parser.add_argument("--similarity_threshold", type=float, default=0.2, help="Threshold for considering documents similar")
+    parser.add_argument("--similarity_threshold", type=float, default=0.15, help="Threshold for considering documents similar")
     # Add other arguments as necessary
     args = parser.parse_args()
     return args
@@ -43,9 +43,6 @@ def remove_review_folders(data_dir):
     except FileNotFoundError:
         # Directory does not exist, no action needed
         print(f"No existing directory to remove: {review_folders_path}")
-
-
-
 
 
 def append_to_global_csv(global_csv_path, data):
@@ -118,6 +115,13 @@ def is_cover_letter(filename):
     # Determines if the file is a cover letter based on the filename
     return 'cover' in filename.lower()
 
+def docx_to_text(file_path):
+    doc = Document(file_path)
+    full_text = []
+    for para in doc.paragraphs:
+        full_text.append(para.text)
+    return '\n'.join(full_text)
+
 # Original pdf_to_text function for general text extraction
 def pdf_to_text(file_path):
     try:
@@ -130,6 +134,14 @@ def pdf_to_text(file_path):
         print(f"Error processing file {file_path}: {e}")
         return None
 
+def file_to_text(file_path):
+    if file_path.endswith('.pdf'):
+        return pdf_to_text(file_path)
+    elif file_path.endswith('.docx'):
+        return docx_to_text(file_path)
+    else:
+        print(f"Unsupported file format: {file_path}")
+        return None
 
 def compare_texts(data):
     user1, text1, user2, text2, similarity_threshold, min_block_size = data
@@ -164,31 +176,22 @@ def generate_comparison_pairs(texts):
     return pairs
 
 def process_and_filter_text(args):
-    """
-    Function to first extract text from a PDF and then filter sentences using a threshold.
-    This is designed to be used with multiprocessing.
-    
-    Args:
-        args (tuple): A tuple containing the filename, the directory of the file, 
-                      the list of sentences to filter out, and the similarity threshold.
-                      
-    Returns:
-        tuple: The filename and its filtered text, or None if text extraction fails.
-    """
-    # Adjust the unpacking to include the threshold
     filename, data_dir, question_sentences, question_filter_threshold = args
-    pdf_path = os.path.join(data_dir, filename)
-    text = pdf_to_text(pdf_path)
+    file_path = os.path.join(data_dir, filename)
+    text = file_to_text(file_path)  # Generalized text extraction
     
     if text is not None:
-        # Now pass the threshold to filter_sentences
         filtered_text = filter_sentences(text, question_sentences, question_filter_threshold)
         return filename, filtered_text
     else:
         return filename, None
 
 def process_pdfs(data_dir, question_sentences, question_filter_threshold):
-    files_to_process = [(filename, data_dir, question_sentences, question_filter_threshold) for filename in os.listdir(data_dir) if filename.endswith('.pdf') and not is_cover_letter(filename)]
+    files_to_process = [
+        (filename, data_dir, question_sentences, question_filter_threshold) 
+        for filename in os.listdir(data_dir) 
+        if (filename.endswith('.pdf') or filename.endswith('.docx')) and not is_cover_letter(filename)
+    ]
 
     with Pool(processes=cpu_count()) as pool:
         results = list(tqdm(pool.imap_unordered(process_and_filter_text, files_to_process), total=len(files_to_process)))
@@ -216,9 +219,6 @@ def main():
 
     remove_review_folders(args.data_dir)
 
-
-
-
     question_sentences = get_sentences(args.question_path, nlp)
 
     cover_letter_sentences = get_sentences(args.cover_letter_path, nlp)
@@ -226,6 +226,7 @@ def main():
     combined_filter_sentences = question_sentences + cover_letter_sentences
 
     print("Preparing data...")
+
 
     # Assuming texts is a dictionary where the key is the username and the value is the text
     texts, submission_paths = process_pdfs(args.data_dir, combined_filter_sentences, args.question_filter_threshold)
@@ -252,18 +253,27 @@ def main():
         handle_individual_folders(args.data_dir, user1, assignment_number, user2, similarity, matched_sections, submission_paths[user1], submission_paths[user2])
         handle_individual_folders(args.data_dir, user2, assignment_number, user1, similarity, matched_sections, submission_paths[user2], submission_paths[user1])
     
-       
+    # Collect all unique student IDs involved in the pairs with high similarity
+    involved_students = set()
+
     # Print or process your results
     for result in filtered_results:
         user1, user2, similarity, _ = result
+        involved_students.add(user1)
+        involved_students.add(user2)
+
         print(f"Similarity between {user1} and {user2}: {similarity:.2%}")
 
     # Count the number of comparisons with similarity > 25%
     count_of_plagiarize = len(filtered_results)
 
     # Print the count
-    print(f"Total document pairs with more than {args.similarity_threshold} similarity: {count_of_plagiarize}")
+    print(f"Total document pairs with more than {args.similarity_threshold*100}% similarity: {count_of_plagiarize}")
 
+    # The total number of unique students involved
+    total_involved_students = len(involved_students)
+    # Print the result
+    print(f"Total number of unique students involved: {total_involved_students}")
 
 if __name__ == "__main__":
     main()

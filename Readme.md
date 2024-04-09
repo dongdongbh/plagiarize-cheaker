@@ -19,11 +19,12 @@ This tool is designed to automate the process of detecting plagiarism in student
 - [spaCy](https://spacy.io/)
 - [NLTK](https://www.nltk.org/)
 - [tqdm](https://tqdm.github.io/)
+- [python-docx](https://pypi.org/project/python-docx//)
 
 Make sure to install the required Python packages using pip:
 
 ```bash
-pip install PyMuPDF spacy nltk tqdm
+pip install PyMuPDF spacy nltk tqdm python-docx
 python -m spacy download en_core_web_sm
 python -m nltk.downloader punkt
 ```
@@ -55,7 +56,7 @@ The tool can be configured and run via the command line. Here are the available 
 
 `--question_filter_threshold`: Threshold for filtering out question sentences. (default: 0.7)
 
-`--similarity_threshold`: Threshold for considering documents similar. (default: 0.2)
+`--similarity_threshold`: Threshold for considering documents similar. (default: 0.15)
 
 Example command:
 
