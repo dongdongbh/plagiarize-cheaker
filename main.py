@@ -18,11 +18,7 @@ from multiprocessing import Pool, cpu_count
 # Load a spaCy language model
 nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])  # or "en_core_web_lg" for better accuracy but requires more memory
 nlp.add_pipe('sentencizer')
-
-
-question_path = './data/questions/Homework6.pdf'
-data_dir = './data/hw6/'
-cover_letter_path = './data/questions/675cover.pdf'
+# spacy.require_gpu()
 
 
 def get_args():
@@ -137,6 +133,13 @@ def pdf_to_text(file_path):
 
 def compare_texts(data):
     user1, text1, user2, text2, similarity_threshold, min_block_size = data
+
+    # doc1 = nlp(text1)
+    # doc2 = nlp(text2)
+    # # Calculate semantic similarity
+    # similarity = doc1.similarity(doc2)
+
+
     matcher = difflib.SequenceMatcher(None, text1, text2)
     similarity = matcher.ratio()
 
@@ -243,7 +246,7 @@ def main():
 
     # Processing the filtered results
     for user1, user2, similarity, matched_sections in filtered_results:
-        assignment_number = data_dir  # Assign the actual assignment number
+        assignment_number = args.data_dir  # Assign the actual assignment number
         data = [user1, user2, assignment_number, similarity, "; ".join(matched_sections), "Potential plagiarism detected."]
         append_to_global_csv(global_csv_path, data)
         handle_individual_folders(args.data_dir, user1, assignment_number, user2, similarity, matched_sections, submission_paths[user1], submission_paths[user2])

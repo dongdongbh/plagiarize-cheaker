@@ -66,10 +66,10 @@ python3 main.py --data_dir "./data/hw6/" --question_path "./data/questions/Homew
 ![Result](./img/result.png "Result of similarity comparison between PDF documents")
 
 ## How It Works
-1. Preparation: The script first removes any existing review folders in the specified data directory to start fresh.
-2. Text Extraction and Filtering: For each PDF submission, the script extracts text, filters out sentences matching those in the provided question and cover letter documents, and then saves the filtered text for comparison.
-3. Comparison: Documents are compared pairwise to calculate similarity scores. Cases where the similarity exceeds the configured threshold are flagged for review.
-4. Review Folders: For each student involved in a flagged case, a folder is created containing their submission, the submissions they're compared with, and a CSV report detailing the comparisons.
+1. **Preparation**: The script first removes any existing review folders in the specified data directory to start fresh.
+2. **Text Extraction and Filtering**: For each PDF submission, the script extracts text, filters out sentences matching those in the provided question and cover letter documents, and then saves the filtered text for comparison.
+3. **Comparison**: Documents are compared pairwise to calculate similarity scores. Cases where the similarity exceeds the configured threshold are flagged for review.
+4. **Review Folders**: For each student involved in a flagged case, a folder is created containing their submission, the submissions they're compared with, and a CSV report detailing the comparisons.
 
 ## License
 
