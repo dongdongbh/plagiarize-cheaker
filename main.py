@@ -10,13 +10,14 @@ from tqdm import tqdm
 import difflib
 from multiprocessing import Pool, cpu_count
 # import re
-import nltk
-nltk.download('punkt')
-from nltk.tokenize import sent_tokenize
+# import nltk
+# nltk.download('punkt')
+# from nltk.tokenize import sent_tokenize
 
 
 # Load a spaCy language model
-nlp = spacy.load("en_core_web_sm")  # or "en_core_web_lg" for better accuracy but requires more memory
+nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])  # or "en_core_web_lg" for better accuracy but requires more memory
+nlp.add_pipe('sentencizer')
 
 
 question_path = './data/questions/Homework6.pdf'
@@ -90,9 +91,10 @@ def handle_individual_folders(data_dir, student_id, assignment_number, peer_id, 
         writer.writerow([student_id, peer_id, assignment_number, similarity_score, "; ".join(matched_sections)])
 
 
-def get_sentences(pdf_path):
+def get_sentences(pdf_path, nlp):
     question_text = pdf_to_text(pdf_path)
-    sentences = sent_tokenize(question_text)
+    doc = nlp(question_text)
+    sentences = [str(sent) for sent in doc.sents]
     return sentences
 
 
@@ -132,10 +134,6 @@ def pdf_to_text(file_path):
         print(f"Error processing file {file_path}: {e}")
         return None
 
-def remove_sentences(submission_text, question_sentences):
-    submission_sentences = sent_tokenize(submission_text)
-    filtered_sentences = [s for s in submission_sentences if s not in question_sentences]
-    return ' '.join(filtered_sentences)
 
 def compare_texts(data):
     user1, text1, user2, text2, similarity_threshold, min_block_size = data
@@ -215,9 +213,12 @@ def main():
 
     remove_review_folders(args.data_dir)
 
-    question_sentences = get_sentences(args.question_path)
 
-    cover_letter_sentences = get_sentences(args.cover_letter_path)
+
+
+    question_sentences = get_sentences(args.question_path, nlp)
+
+    cover_letter_sentences = get_sentences(args.cover_letter_path, nlp)
 
     combined_filter_sentences = question_sentences + cover_letter_sentences
 
