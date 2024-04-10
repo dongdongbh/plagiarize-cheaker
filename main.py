@@ -36,7 +36,7 @@ def update_detailed_cheating_instances(user1, user2, hw_number, similarity):
     detailed_cheating_instances[user2].append((hw_number, user1, similarity))
 
 
-def generate_enhanced_global_report(data_dir, detailed_cheating_instances):
+def generate_enhanced_global_report(data_dir):
     global_csv_path = os.path.join(data_dir, 'global-report.csv')
 
     print(f"Generating enhanced global report to file {global_csv_path}")
@@ -49,14 +49,18 @@ def generate_enhanced_global_report(data_dir, detailed_cheating_instances):
         sorted_students = sorted(detailed_cheating_instances.items(), key=lambda x: len({hw_number for hw_number, _, _ in x[1]}), reverse=True)
 
         for student_id, details in sorted_students:
-            # Aggregate details by homework
+            # Aggregate details by homework, and then sort peers within each homework by similarity
             hw_details = {}
             for hw_number, peer_id, similarity in details:
                 if hw_number not in hw_details:
                     hw_details[hw_number] = []
                 hw_details[hw_number].append((peer_id, similarity))
             
-            # Compile details string
+            # For each homework, sort the details by similarity in descending order
+            for hw in hw_details:
+                hw_details[hw].sort(key=lambda x: x[1], reverse=True)
+            
+            # Compile details string, now with peers sorted by similarity
             details_str = "; ".join([
                 f"HW{hw}: {', '.join([f'{peer_id} (Similarity: {similarity:.2%})' for peer_id, similarity in peers])}" 
                 for hw, peers in hw_details.items()
