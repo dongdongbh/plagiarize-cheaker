@@ -240,7 +240,7 @@ def process_pdfs(data_dir, question_sentences, question_filter_threshold):
     return filtered_texts, submission_paths
 
 def process_single_homework(data_dir, question_path, cover_letter_path, similarity_threshold, min_block_size, question_filter_threshold, hw_number):
-    global_csv_path = os.path.join(data_dir, 'plagiarism_report.csv')
+    global_csv_path = os.path.join(data_dir, f'report_hw{hw_number}.csv')
 
     # Initialize or clear the global CSV file for this homework
     with open(global_csv_path, 'w', newline='') as file:
@@ -286,35 +286,36 @@ def print_summary_statistics(filtered_results):
     print(f"Total document pairs with more than specified similarity: {len(filtered_results)}")
     print(f"Total number of unique students involved: {len(involved_students)}")
 
-def process_homework_dirs(data_dir, similarity_thresholds, min_block_size, question_filter_threshold):
+def process_homework_dirs(data_dir, config):
+    # Extract necessary configurations
+    similarity_thresholds = config["similarity_thresholds"]
+    min_block_size = config["min_block_size"]
+    question_filter_threshold = config["question_filter_threshold"]
+    specified_homeworks = config.get("specified_homeworks", None)
 
+    # Identify all hw directories
     hw_dirs = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d)) and d.startswith('hw')]
+
+    # Filter hw_dirs based on specified_homeworks, if any
+    if specified_homeworks is not None:
+        hw_dirs = [d for d in hw_dirs if int(d[2:]) in specified_homeworks]
+
     cover_letter_path = os.path.join(data_dir, "questions", "675cover.pdf")
     
     for hw_dir_name in hw_dirs:
-        hw_dir = os.path.join(data_dir, hw_dir_name)
-        hw_number = hw_dir_name[2:]  # Extract the number from the directory name, e.g., '1' from 'hw1'
+        hw_number = hw_dir_name[2:]  # Extract the numeric part
         current_assignment = f"HW{hw_number}"
-        current_threshold = similarity_thresholds.get(current_assignment, 0.15)  # Use the provided threshold or default to 0.15
+        current_threshold = similarity_thresholds.get(current_assignment, 0.15)
 
         question_path = os.path.join(data_dir, "questions", f"Homework{hw_number}.pdf")
-        
-        
-        print(f"------------------Processing {hw_dir} with questions from {question_path}--------------------")
-        process_single_homework(hw_dir, question_path, cover_letter_path, current_threshold, min_block_size, question_filter_threshold, hw_number)
+        print(f"------------------Processing {hw_dir_name} with questions from {question_path}--------------------")
+        process_single_homework(os.path.join(data_dir, hw_dir_name), question_path, cover_letter_path, current_threshold, min_block_size, question_filter_threshold, hw_number)
 
 if __name__ == "__main__":
     args = get_args()
     config = load_config(args.config_file)
-
-    # Now you can use config dict directly to access your settings
-    data_dir = config["data_dir"]
-    min_block_size = config["min_block_size"]
-    question_filter_threshold = config["question_filter_threshold"]
-    similarity_thresholds = config["similarity_thresholds"]
-
-    # Pass these parameters to your processing functions as needed
-    process_homework_dirs(data_dir, similarity_thresholds, min_block_size, question_filter_threshold)
+    
+    process_homework_dirs(config["data_dir"], config)
     # After processing all homework directories
-    generate_enhanced_global_report(data_dir)
+    generate_enhanced_global_report(config["data_dir"])
 
