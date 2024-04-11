@@ -59,7 +59,37 @@ This tool is designed to automate the process of detecting plagiarism in student
 ## File Structure
 
 Organize your files as follows to fit the script's expectations:
-
+```
+├── data
+│   ├── global-report.csv
+│   ├── hw1
+|   |    |---submission-student1.pdf
+|   |    |---submission-student2.pdf
+|   |    |---review_folders
+|   |    |    |    |---localreport.csv
+|   |    |    |    |---submission-student1.pdf
+|   |    |    |    |---submission-student2.pdf
+|   |    |---global-report-hw1.csv
+│   ├── hw2
+│   ├── hw3
+│   ├── hw4
+│   ├── hw5
+│   ├── hw6
+│   ├── hw7
+│   ├── hw8
+│   ├── hw9
+│   └── questions
+│       ├── 675cover.pdf
+│       ├── Homework1.pdf
+│       ├── Homework2.pdf
+│       ├── Homework3.pdf
+│       ├── Homework4.pdf
+│       ├── Homework5.pdf
+│       ├── Homework6.pdf
+│       ├── Homework7.pdf
+│       ├── Homework8.pdf
+│       └── Homework9.pdf
+```
 - **data/**: Main directory for student submissions and questions.
     - **questions/**: Contains the PDF files with homework questions and the cover letter.
         - `675cover.pdf`: The cover letter.
