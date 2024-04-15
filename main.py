@@ -42,10 +42,15 @@ def generate_enhanced_global_report(data_dir):
     print(f"Generating enhanced global report to file {global_csv_path}")
     
     with open(global_csv_path, 'w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(['Student ID', 'Cheating Frequency (Unique Assignments)', 'Details'])
+        global_csv_path = os.path.join(data_dir, 'global-report.csv')
 
-        # Sort students by the number of unique assignments they've been flagged for
+    print(f"Generating enhanced global report to file {global_csv_path}")
+    
+    with open(global_csv_path, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Student ID', 'Cheating Frequency (Unique Assignments)', 'Max Similarity', 'Average Similarity', 'Details'])
+
+        # Sort students by cheating frequency
         sorted_students = sorted(detailed_cheating_instances.items(), key=lambda x: len({hw_number for hw_number, _, _ in x[1]}), reverse=True)
 
         for student_id, details in sorted_students:
@@ -65,7 +70,12 @@ def generate_enhanced_global_report(data_dir):
                 f"HW{hw}: {', '.join([f'{peer_id} (Similarity: {similarity:.2%})' for peer_id, similarity in peers])}" 
                 for hw, peers in hw_details.items()
             ])
-            writer.writerow([student_id, len(set(hw_details.keys())), details_str])
+
+            # Calculate max and average similarity
+            max_similarity = max(similarity for _, similarity in details)
+            avg_similarity = sum(similarity for _, similarity in details) / len(details)
+
+            writer.writerow([student_id, len(set(hw_details.keys())), max_similarity, avg_similarity, details_str])
 
 def get_args():
     parser = argparse.ArgumentParser(description="Plagiarism Detection Tool")
