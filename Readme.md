@@ -62,6 +62,7 @@ Organize your files as follows to fit the script's expectations:
 ```
 ├── data
 │   ├── global-report.csv
+│   ├── students-list.csv
 │   ├── hw1
 |   |    |---submission-student1.pdf
 |   |    |---submission-student2.pdf

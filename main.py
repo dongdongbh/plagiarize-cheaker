@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 from docx import Document
 import fitz  # PyMuPDF
 import csv
@@ -10,7 +11,7 @@ from shutil import copy2
 from tqdm import tqdm
 import difflib
 from multiprocessing import Pool, cpu_count
-# import re
+import re
 # import nltk
 # nltk.download('punkt')
 # from nltk.tokenize import sent_tokenize
@@ -25,16 +26,25 @@ nlp.add_pipe('sentencizer')
 # Format: {student_id: [(hw_number, peer_id, similarity), ...], ...}
 detailed_cheating_instances = {}
 
+def load_student_dict(data_dir):
+    filepath = os.path.join(data_dir, "students-list.csv")
+    # Load the CSV file
+    df = pd.read_csv(filepath)
+    
+    # Assuming the columns are named 'Student ID', 'First Name', 'Last Name'
+    # Create a new column for full name by combining first and last names
+    df['Full Name'] = df['First Name'].str.strip() + ' ' + df['Last Name'].str.strip()
+    
+    # Create a dictionary mapping user names (student IDs) to full names
+    student_dict = df.set_index('Username')['Full Name'].to_dict()    
+    return student_dict
 
-def update_detailed_cheating_instances(user1, user2, hw_number, similarity):
+def update_detailed_cheating_instances(user1, user2, hw_number, similarity, collaborators_listed):
+    # This function now also receives a boolean `collaborators_listed` indicating if collaborators were listed
     if user1 not in detailed_cheating_instances:
         detailed_cheating_instances[user1] = []
-    if user2 not in detailed_cheating_instances:
-        detailed_cheating_instances[user2] = []
-    
-    detailed_cheating_instances[user1].append((hw_number, user2, similarity))
-    detailed_cheating_instances[user2].append((hw_number, user1, similarity))
 
+    detailed_cheating_instances[user1].append((hw_number, user2, similarity, collaborators_listed))
 
 def generate_enhanced_global_report(data_dir):
     global_csv_path = os.path.join(data_dir, 'global-report.csv')
@@ -42,40 +52,35 @@ def generate_enhanced_global_report(data_dir):
     print(f"Generating enhanced global report to file {global_csv_path}")
     
     with open(global_csv_path, 'w', newline='') as file:
-        global_csv_path = os.path.join(data_dir, 'global-report.csv')
-
-    print(f"Generating enhanced global report to file {global_csv_path}")
-    
-    with open(global_csv_path, 'w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['Student ID', 'Cheating Frequency (Unique Assignments)', 'Max Similarity', 'Average Similarity', 'Details'])
+        writer.writerow(['Student ID', 'Cheating Frequency (Unique Assignments)', 'Max Similarity', 'Average Similarity', 'Details', 'Unlisted Collaborators'])
 
-        # Sort students by cheating frequency
-        sorted_students = sorted(detailed_cheating_instances.items(), key=lambda x: len({hw_number for hw_number, _, _ in x[1]}), reverse=True)
+        sorted_students = sorted(detailed_cheating_instances.items(), key=lambda x: len(set(hw_number for hw_number, _, _, _ in x[1])), reverse=True)
 
         for student_id, details in sorted_students:
-            # Aggregate details by homework, and then sort peers within each homework by similarity
             hw_details = {}
-            for hw_number, peer_id, similarity in details:
+            hw_unlisted_collaborators = set()  # Track homeworks with unlisted collaborators using a set
+            
+            for hw_number, peer_id, similarity, collaborators_listed in details:
                 if hw_number not in hw_details:
                     hw_details[hw_number] = []
                 hw_details[hw_number].append((peer_id, similarity))
+                
+                if not collaborators_listed:
+                    hw_unlisted_collaborators.add(hw_number)  # Add homework number if collaborators were not listed
             
-            # For each homework, sort the details by similarity in descending order
-            for hw in hw_details:
-                hw_details[hw].sort(key=lambda x: x[1], reverse=True)
-            
-            # Compile details string, now with peers sorted by similarity
-            details_str = "; ".join([
-                f"HW{hw}: {', '.join([f'{peer_id} (Similarity: {similarity:.2%})' for peer_id, similarity in peers])}" 
-                for hw, peers in hw_details.items()
-            ])
+            details_str = "; ".join(
+                f"HW{hw}: {', '.join(f'{peer_id} (Similarity: {similarity:.2%})' for peer_id, similarity in peers)}"
+                for hw, peers in sorted(hw_details.items())
+            )
 
-            # Calculate max and average similarity
-            max_similarity = max(similarity for _, similarity in details)
-            avg_similarity = sum(similarity for _, similarity in details) / len(details)
+            max_similarity = max(similarity for _, similarity in sum(hw_details.values(), []))
+            avg_similarity = sum(similarity for _, similarity in sum(hw_details.values(), [])) / sum(len(peers) for peers in hw_details.values())
 
-            writer.writerow([student_id, len(set(hw_details.keys())), max_similarity, avg_similarity, details_str])
+            unlisted_collaborator_times = len(hw_unlisted_collaborators)  # Number of homeworks where no collaborators were listed
+
+            writer.writerow([student_id, len(hw_details), f"{max_similarity:.2%}", f"{avg_similarity:.2%}", details_str, unlisted_collaborator_times])
+
 
 def get_args():
     parser = argparse.ArgumentParser(description="Plagiarism Detection Tool")
@@ -99,8 +104,8 @@ def remove_review_folders(data_dir):
         print(f"No existing directory to remove: {review_folders_path}")
 
 
-def append_to_global_csv(global_csv_path, data):
-    with open(global_csv_path, 'a', newline='') as file:
+def append_to_hw_csv(hw_csv_path, data):
+    with open(hw_csv_path, 'a', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(data)
 
@@ -144,13 +149,15 @@ def get_sentences(pdf_path, nlp):
     return sentences
 
 
-def filter_sentences(text, junk_sentences, question_filter_threshold):
+def sentence_filter(text, junk_sentences, threshold):
+    """Filter out specified sentences from text based on a similarity threshold."""
     filtered_sentences = []
     doc = nlp(text)
     for sent in doc.sents:
-        if not any(difflib.SequenceMatcher(None, str(sent), junk).ratio() > question_filter_threshold for junk in junk_sentences):
+        if not any(difflib.SequenceMatcher(None, str(sent), junk).ratio() > threshold for junk in junk_sentences):
             filtered_sentences.append(str(sent))
     return " ".join(filtered_sentences)
+
 
 def is_cover_letter(filename):
     # Determines if the file is a cover letter based on the filename
@@ -207,8 +214,6 @@ def compare_texts(data):
     else:
         return None
 
-
-
 def generate_comparison_pairs(texts):
     # Generate all unique pairs of texts for comparison
     keys = list(texts.keys())
@@ -216,77 +221,103 @@ def generate_comparison_pairs(texts):
     pairs = [(keys[i], texts[keys[i]], keys[j], texts[keys[j]]) for i in range(len(keys)) for j in range(i+1, len(keys))]
     return pairs
 
-def process_and_filter_text(args):
-    filename, data_dir, question_sentences, question_filter_threshold = args
-    file_path = os.path.join(data_dir, filename)
-    text = file_to_text(file_path)  # Generalized text extraction
-    
-    if text is not None:
-        filtered_text = filter_sentences(text, question_sentences, question_filter_threshold)
-        return filename, filtered_text
-    else:
-        return filename, None
+def extract_collaborators(text, pattern):
+    """ Extract sentences containing collaborator names using a regex pattern. """
+    sentences = text.split('.')
+    collaborators = set()
+    for sentence in sentences:
+        if pattern.search(sentence):
+            collaborators.update(pattern.findall(sentence))
+    return collaborators
 
-def process_pdfs(data_dir, question_sentences, question_filter_threshold):
+def extract_and_filter_text(filepath, question_sentences, filter_threshold, student_names, current_student):
+    """Extract text and filter based on provided content, then extract potential collaborators."""
+    text = None
+    filtered_text = None
+    collaborators = set()
+
+    if filepath.endswith('.pdf'):
+        text = pdf_to_text(filepath)
+    elif filepath.endswith('.docx'):
+        text = docx_to_text(filepath)
+    else:
+        return filepath, None, set()  # Unsupported format
+
+    if text:
+        # Extract collaborator names from the text
+        names_to_match = [name for name in student_names.values() if name != student_names[current_student]]
+        pattern = re.compile('|'.join(re.escape(name) for name in names_to_match), re.IGNORECASE)
+        collaborators = extract_collaborators(text, pattern)
+
+        # Filter text if not a cover letter
+        if 'cover' not in os.path.basename(filepath).lower():
+            filtered_text = sentence_filter(text, question_sentences, filter_threshold)
+        else:
+            filtered_text = None  # Do not use cover letter text for plagiarism checks
+
+    return filepath, filtered_text, collaborators
+
+def process_pdfs(data_dir, filter_sentences, question_filter_threshold, student_names):
+    """Process all PDFs and DOCX files for text extraction, filtering, and collaborator extraction."""
     files_to_process = [
-        (filename, data_dir, question_sentences, question_filter_threshold) 
+        (os.path.join(data_dir, filename), filter_sentences, question_filter_threshold, student_names, filename.split('_')[1])
         for filename in os.listdir(data_dir) 
-        if (filename.endswith('.pdf') or filename.endswith('.docx')) and not is_cover_letter(filename)
+        if (filename.endswith('.pdf') or filename.endswith('.docx'))
     ]
 
-    with Pool(processes=cpu_count()) as pool:
-        results = list(tqdm(pool.imap_unordered(process_and_filter_text, files_to_process), total=len(files_to_process)))
-    
-    # Initialize dictionaries for the results
+    print("Extracting text and checking for collaborators...")
+    with Pool(cpu_count()) as pool:
+        # Use starmap to correctly pass multiple arguments from each tuple
+        results = pool.starmap(extract_and_filter_text, files_to_process)
+
+    texts = {}
     submission_paths = {}
-    filtered_texts = {}
-    
-    for filename, filtered_text in results:
-        if filtered_text is not None:
-            username = filename.split('_')[1]
-            submission_paths[username] = os.path.join(data_dir, filename)
-            filtered_texts[username] = filtered_text
-    
-    return filtered_texts, submission_paths
+    collaborator_mentions = {}
+    for filepath, text, collaborators in results:
+        current_student = filepath.split('_')[1]
+        submission_paths[current_student] = filepath
+        if text:
+            texts[current_student] = text
+        if collaborators:
+            collaborator_mentions[current_student] = collaborators
 
-def process_single_homework(data_dir, question_path, cover_letter_path, similarity_threshold, min_block_size, question_filter_threshold, hw_number):
-    global_csv_path = os.path.join(data_dir, f'report_hw{hw_number}.csv')
+    return texts, submission_paths, collaborator_mentions
 
-    # Initialize or clear the global CSV file for this homework
-    with open(global_csv_path, 'w', newline='') as file:
+
+def process_single_homework(data_dir, question_path, cover_letter_path, similarity_threshold, min_block_size, question_filter_threshold, hw_number, student_names):
+    hw_csv_path = os.path.join(data_dir, f'report_hw{hw_number}.csv')
+    with open(hw_csv_path, 'w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['Student ID 1', 'Student ID 2', 'Assignment Number', 'Similarity Score', 'Matched Sections', 'Explanatory Note'])
+        writer.writerow(['Student ID 1', 'Student ID 2', 'Assignment Number', 'Similarity Score', 'Matched Sections', 'Explanatory Note', 'Collaborator u1', 'Collaborator u2'])
 
-    # You might still want to remove review folders here or ensure they're clean before starting
-    remove_review_folders(data_dir)
+    question_content = get_sentences(question_path, nlp)
+    cover_letter_content = get_sentences(cover_letter_path, nlp)
+    combined_filter_sentences = question_content + cover_letter_content
 
-    # Extract sentences from question and cover letter PDFs
-    question_sentences = get_sentences(question_path, nlp)
-    cover_letter_sentences = get_sentences(cover_letter_path, nlp)
-    combined_filter_sentences = question_sentences + cover_letter_sentences
-    print("Preparing data...")
+    texts, submission_paths, collaborator_data = process_pdfs(data_dir, combined_filter_sentences, question_filter_threshold, student_names)
 
-    # Process PDFs/DOCXs and compare texts
-    texts, submission_paths = process_pdfs(data_dir, combined_filter_sentences, question_filter_threshold)
     pairs = generate_comparison_pairs(texts)
-    print(f"Total comparisons to perform: {len(pairs)}")
-
-    print("Comparing data...")
     comparison_data = [(user1, text1, user2, text2, similarity_threshold, min_block_size) for user1, text1, user2, text2 in pairs]
 
+    print("Comparing data...")
     with Pool(cpu_count()) as pool:
         results = list(tqdm(pool.imap(compare_texts, comparison_data), total=len(comparison_data)))
 
     filtered_results = [result for result in results if result is not None]
 
-    # Process results and update the global CSV
     for user1, user2, similarity, matched_sections in filtered_results:
-        assignment_number = os.path.basename(data_dir)  # Extract assignment number from directory name
-        data = [user1, user2, assignment_number, similarity, "; ".join(matched_sections), "Potential plagiarism detected."]
-        append_to_global_csv(global_csv_path, data)
-        update_detailed_cheating_instances(user1, user2, hw_number, similarity)
-        handle_individual_folders(data_dir, user1, assignment_number, user2, similarity, matched_sections, submission_paths[user1], submission_paths[user2])
-        handle_individual_folders(data_dir, user2, assignment_number, user1, similarity, matched_sections, submission_paths[user2], submission_paths[user1])
+        collaborators1 = ", ".join(collaborator_data.get(user1, []))
+        collaborators2 = ", ".join(collaborator_data.get(user2, []))
+        collaborators_listed1 = bool(collaborators1)
+        collaborators_listed2 = bool(collaborators2)
+
+        data = [user1, user2, hw_number, similarity, "; ".join(matched_sections), "Potential plagiarism detected.", collaborators1, collaborators2]
+        append_to_hw_csv(hw_csv_path, data)
+        update_detailed_cheating_instances(user1, user2, hw_number, similarity, collaborators_listed1)
+        update_detailed_cheating_instances(user2, user1, hw_number, similarity, collaborators_listed2)
+        handle_individual_folders(data_dir, user1, hw_number, user2, similarity, matched_sections, submission_paths[user1], submission_paths[user2])
+        handle_individual_folders(data_dir, user2, hw_number, user1, similarity, matched_sections, submission_paths[user2], submission_paths[user1])
+
 
     # Print summary statistics for this homework
     print_summary_statistics(filtered_results)
@@ -302,6 +333,7 @@ def process_homework_dirs(data_dir, config):
     min_block_size = config["min_block_size"]
     question_filter_threshold = config["question_filter_threshold"]
     specified_homeworks = config.get("specified_homeworks", None)
+    student_id_name_dict = load_student_dict(data_dir)
 
     # Identify all hw directories
     hw_dirs = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d)) and d.startswith('hw')]
@@ -319,12 +351,12 @@ def process_homework_dirs(data_dir, config):
 
         question_path = os.path.join(data_dir, "questions", f"Homework{hw_number}.pdf")
         print(f"------------------Processing {hw_dir_name} with questions from {question_path}--------------------")
-        process_single_homework(os.path.join(data_dir, hw_dir_name), question_path, cover_letter_path, current_threshold, min_block_size, question_filter_threshold, hw_number)
+        process_single_homework(os.path.join(data_dir, hw_dir_name), question_path, cover_letter_path, current_threshold, min_block_size, question_filter_threshold, hw_number, student_id_name_dict)
 
 if __name__ == "__main__":
     args = get_args()
     config = load_config(args.config_file)
-    
+
     process_homework_dirs(config["data_dir"], config)
     # After processing all homework directories
     generate_enhanced_global_report(config["data_dir"])
