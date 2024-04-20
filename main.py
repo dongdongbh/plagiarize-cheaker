@@ -53,7 +53,7 @@ def generate_enhanced_global_report(data_dir):
     
     with open(global_csv_path, 'w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['Student ID', 'Cheating Frequency (Unique Assignments)', 'Max Similarity', 'Average Similarity', 'Details', 'Unlisted Collaborators'])
+        writer.writerow(['Student ID', 'Cheating Frequency (Unique Assignments)', 'Max Similarity', 'Average Similarity', 'Details', 'Unlisted Collaborators', 'HWs Without Listed Collaborators'])
 
         sorted_students = sorted(detailed_cheating_instances.items(), key=lambda x: len(set(hw_number for hw_number, _, _, _ in x[1])), reverse=True)
 
@@ -78,8 +78,9 @@ def generate_enhanced_global_report(data_dir):
             avg_similarity = sum(similarity for _, similarity in sum(hw_details.values(), [])) / sum(len(peers) for peers in hw_details.values())
 
             unlisted_collaborator_times = len(hw_unlisted_collaborators)  # Number of homeworks where no collaborators were listed
+            hw_without_collaborators = ", ".join(sorted(hw_unlisted_collaborators))  # List homework numbers without listed collaborators
 
-            writer.writerow([student_id, len(hw_details), f"{max_similarity:.2%}", f"{avg_similarity:.2%}", details_str, unlisted_collaborator_times])
+            writer.writerow([student_id, len(hw_details), f"{max_similarity:.2%}", f"{avg_similarity:.2%}", details_str, unlisted_collaborator_times, hw_without_collaborators])
 
 
 def get_args():
@@ -257,6 +258,10 @@ def extract_and_filter_text(filepath, question_sentences, filter_threshold, stud
 
     return filepath, filtered_text, collaborators
 
+def extract_and_filter_text_starmap(args):
+    """Wrapper function to unpack arguments for extract_and_filter_text."""
+    return extract_and_filter_text(*args)
+
 def process_pdfs(data_dir, filter_sentences, question_filter_threshold, student_names):
     """Process all PDFs and DOCX files for text extraction, filtering, and collaborator extraction."""
     files_to_process = [
@@ -266,9 +271,12 @@ def process_pdfs(data_dir, filter_sentences, question_filter_threshold, student_
     ]
 
     print("Extracting text and checking for collaborators...")
+
     with Pool(cpu_count()) as pool:
-        # Use starmap to correctly pass multiple arguments from each tuple
-        results = pool.starmap(extract_and_filter_text, files_to_process)
+        # Use imap_unordered to correctly pass multiple arguments from each tuple
+        # Wrap the imap_unordered call with tqdm for progress tracking
+        results = list(tqdm(pool.imap_unordered(extract_and_filter_text_starmap, files_to_process), total=len(files_to_process)))
+
 
     texts = {}
     submission_paths = {}
@@ -288,7 +296,7 @@ def process_single_homework(data_dir, question_path, cover_letter_path, similari
     hw_csv_path = os.path.join(data_dir, f'report_hw{hw_number}.csv')
     with open(hw_csv_path, 'w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['Student ID 1', 'Student ID 2', 'Assignment Number', 'Similarity Score', 'Matched Sections', 'Explanatory Note', 'Collaborator u1', 'Collaborator u2'])
+        writer.writerow(['Student ID 1', 'Student ID 2', 'Assignment Number', 'Similarity Score', 'Matched Sections', 'Collaborator u1', 'Collaborator u2'])
 
     question_content = get_sentences(question_path, nlp)
     cover_letter_content = get_sentences(cover_letter_path, nlp)
@@ -311,7 +319,7 @@ def process_single_homework(data_dir, question_path, cover_letter_path, similari
         collaborators_listed1 = bool(collaborators1)
         collaborators_listed2 = bool(collaborators2)
 
-        data = [user1, user2, hw_number, similarity, "; ".join(matched_sections), "Potential plagiarism detected.", collaborators1, collaborators2]
+        data = [user1, user2, hw_number, similarity, "; ".join(matched_sections), collaborators1, collaborators2]
         append_to_hw_csv(hw_csv_path, data)
         update_detailed_cheating_instances(user1, user2, hw_number, similarity, collaborators_listed1)
         update_detailed_cheating_instances(user2, user1, hw_number, similarity, collaborators_listed2)
