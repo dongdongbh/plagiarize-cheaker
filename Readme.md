@@ -1,6 +1,8 @@
 # Plagiarism Detection Tool
 
-This tool is designed to automate the process of detecting plagiarism in student submissions across various assignments. It extracts text from both PDF and DOCX files, filters out common questions, and compares documents to identify significant similarities using configurable thresholds.
+This tool is designed to automate the process of detecting plagiarism in student submissions across various assignments. It extracts text from both PDF and DOCX files, filters out common questions, and compares documents to identify significant similarities using configurable thresholds. 
+
+It was initially developed for a course with CIS675: Design and Analysis of Algorithms students at the Syracuse University and it can be adapted to other academic settings.
 
 ## Features
 
@@ -11,6 +13,7 @@ This tool is designed to automate the process of detecting plagiarism in student
 - Generates detailed plagiarism reports, including global reports that summarize findings across all assignments.
 - Facilitates review by creating symbolic links to original submissions instead of copying files, reducing disk space usage.
 - Allows setting different similarity thresholds for different assignments via a JSON configuration file, accommodating varied analysis needs.
+- Search through disclosure statement and reports all collaborators and identify all plagiariser who didn't list any collaborators.
 
 ## Getting Started
 
@@ -21,6 +24,7 @@ This tool is designed to automate the process of detecting plagiarism in student
 - [spaCy](https://spacy.io/)
 - [tqdm](https://tqdm.github.io/)
 - [python-docx](https://pypi.org/project/python-docx/)
+- [pandas](https://pandas.pydata.org/)
 
 ### Installation
 
@@ -118,10 +122,9 @@ Organize your files as follows to fit the script's expectations:
     ```bash
     python3 main.py --config_file "./config.json"
     ```
+5. **Review the reports**: After processing, check the `global-report.csv` for an overview of potential plagiarism cases and inspect the `review_folders` for detailed comparisons.
 
 ![Result](./img/result.png "Result of similarity comparison between PDF documents")
-
-5. **Review the reports**: After processing, check the `global-report.csv` for an overview of potential plagiarism cases and inspect the `review_folders` for detailed comparisons.
 
 ## Customizing the Configuration
 
