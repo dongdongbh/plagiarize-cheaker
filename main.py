@@ -1,3 +1,13 @@
+"""
+Plagiarism Detection Tool
+
+Author: Dongda Li
+Email: dli160@syr.edu
+
+This file is part of the Plagiarism Detection Tool project.
+This project is licensed under the MIT License - see the LICENSE file for details.
+"""
+
 import argparse
 import pandas as pd
 from docx import Document
